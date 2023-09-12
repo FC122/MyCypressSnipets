@@ -55,3 +55,158 @@ Cypress.Commands.add('recurseVisit', (url) => {
         }
     );
 })
+
+
+
+//email testing
+
+//configs
+const { defineConfig } = require("cypress");
+const getLastEmail = require('./cypress/plugins/get-last-email');
+const parseEmail = require('./cypress/plugins/parse-email')
+const deleteUnseenEmails = require('./cypress/plugins/delete-email')
+
+module.exports = defineConfig({
+  e2e: {
+    setupNodeEvents(on, config) {
+      on("task", {
+        generateOTP: require("cypress-otp"),
+        async getLastEmail({ user, pass }) {
+          const get_Email = await getLastEmail(user, pass)
+          return get_Email
+        },
+        async parseEmail({ message }) {
+          const parse_Email = await parseEmail(message)
+          return parse_Email
+        },
+        async deleteUnseenEmails({ user, pass }) {
+          const delete_Email = await deleteUnseenEmails(user, pass)
+          return delete_Email
+        }
+      })
+      require('@cypress/grep/src/plugin')(config);
+    }
+  },
+
+
+//files
+
+    //delet
+    const { ImapFlow } = require("imapflow");
+
+const deleteUnseenEmails = async (user, pass) => {
+  let client = new ImapFlow({
+    host: 'imap.gmail.com',
+    port: 993,
+    secure: true,
+    auth: {
+      user: user,
+      pass: pass
+    }
+  });
+  await client.connect();
+
+  let result = false;
+
+  await client.mailboxOpen("INBOX");
+
+  try {//delete messages that are unseen
+    result = await client.messageDelete({ seen: false });
+  } catch (error) {
+    console.error(error);
+  } finally {
+    await client.mailboxClose();
+  }
+  await client.logout();
+
+  return result;
+};
+
+module.exports = deleteUnseenEmails;
+
+
+//get
+const { ImapFlow } = require("imapflow")
+
+const getLastEmail = async (user, pass) => {
+  debugger
+  let client = new ImapFlow({
+    host: "imap.gmail.com",//constant depending on service
+    port: 993,
+    secure: true,
+    auth: {
+      user: user,
+      pass: pass
+    }
+  })
+  await client.connect()
+
+  let message
+
+  let lock = await client.getMailboxLock("INBOX")
+
+  try { //taking latest message
+    message = await client.fetchOne(client.mailbox.exists, { source: true })
+  } finally {
+    lock.release()
+  }
+
+  await client.logout()
+
+  if (!message)
+    return message
+  else
+    return {
+      uid: message.uid,
+      source: message.source //email data - text, html, subject in raw form
+    }
+}
+
+module.exports = getLastEmail
+
+
+//parse
+const simpleParser = require("mailparser").simpleParser
+
+const parseEmail = async (message) => {
+  const source = Buffer.from(message.source)
+  const mail = await simpleParser(
+    source
+  )//raw data converted into an object
+  return { //object with data needed for testing
+    subject: mail.subject,
+    text: mail.text,
+    html: mail.html,
+    attachments: mail.attachments
+  }
+}
+
+module.exports = parseEmail
+
+
+//in test
+ const getLastEmail = (subject) => {
+    //executes the task for set parameters until condition is met
+    return recurse(
+      () => {//task
+        return cy.task("getLastEmail", { user: Cypress.env('imap_email'), pass: Cypress.env('imap_password') }).then((message) => {
+          return cy.task("parseEmail", { message }).then((body) => {
+            return body
+          })
+        })
+      },
+      (body) => body.subject === subject,//condition
+      {//parameters
+        log: true,
+        limit: 5, // max number of iterations
+        timeout: 30000, // time limit in ms
+        delay: 500, // delay before next iteration, ms
+      }
+    )
+  }
+
+  const deleteUnseenEmails = () => {
+    cy.task('deleteUnseenEmails', { user: Cypress.env('imap_email'), pass: Cypress.env('imap_password') }).then((result) => {
+      expect(result).to.eq(true)
+    })
+  }
