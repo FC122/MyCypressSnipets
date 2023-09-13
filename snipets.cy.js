@@ -210,3 +210,32 @@ module.exports = parseEmail
       expect(result).to.eq(true)
     })
   }
+
+
+//custom error handling where for loop is used to do assertions but we don't want to test to fail before it trys all combinations
+ cy.wait('@activityLogs').then((interception) => {
+      let objectNames = interception.response.body.objectNames
+      let errors = []
+      for (let i = 0; i < objectNames.length; i++) {
+        Activities.buttonFilterOrRefine().click()
+        Activities.FilterDialog.buttonClear().click()
+        Activities.FilterDialog.selectObject().click()
+        Generic.selectDropdownItem().not(':hidden').contains(snakeCaseToAllCaps(objectNames[i])).scrollIntoView().click({ force: true })
+        cy.contains('Filter or refine results').click()
+        Activities.FilterDialog.buttonApply().click()
+        cy.url().then(url => {
+          if (url.includes(`objectName=${objectNames[i]}`)) {
+            errors.push(objectNames[i])
+          }
+        })
+      }
+      cy.wrap(null).then(() => {
+        if (errors.length > 0) {
+          let errorMessage = ' '
+          for (let i = 0; i < errors.length; i++) {
+            errorMessage += `-Url doesn't contain ${errors[i]}-\n`
+          }
+          throw new Error(errorMessage)
+        }
+      })
+    })
