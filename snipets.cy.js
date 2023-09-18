@@ -284,3 +284,55 @@ it('Some test', ()=>{
 })
 
 })
+
+// ***********************************************
+// Overwrite should to enable checking color and background color of elements
+//
+//how to use it:
+// cy.get('button').should('have.color', 'black')
+// cy.get('button').should('have.color', '#000000')
+// cy.get('button').should('have.color', 'rgba(0, 0, 0)')
+// cy.get('button').should('have.backgroundColor', '#cccccc')
+// ***********************************************
+const compareColor = (color, property) => (targetElement) => {
+    const tempElement = document.createElement('div');
+    tempElement.style.color = color;
+    tempElement.style.display = 'none'; // make sure it doesn't actually render
+    document.body.appendChild(tempElement); // append so that `getComputedStyle` actually works
+
+    const tempColor = getComputedStyle(tempElement).color;
+    const targetColor = getComputedStyle(targetElement[0])[property];
+
+    document.body.removeChild(tempElement); // remove it because we're done with it
+
+    expect(tempColor).to.equal(targetColor);
+};
+
+/**
+ * Function checks that element is not shown by element not existing or not being visible 
+ */
+const shouldNotBeShown = (subject, option) => () => {
+    if (subject.css('display') == 'none' || subject.css('visibility') == 'hidden' || subject.length === 0) {
+        //Button is not shown
+        expect(true).to.be.true;
+    } else {
+        //Throw custom error
+        throw new Error('Element is shown when it should not be.');
+    }
+}
+
+Cypress.Commands.overwrite('should', (originalFn, subject, expectation, ...args) => {
+    const customMatchers = {
+        'have.backgroundColor': compareColor(args[0], 'backgroundColor'),
+        'have.color': compareColor(args[0], 'color'),
+        'not.be.shown': shouldNotBeShown(subject, 'not')
+    };
+    // See if the expectation is a string and if it is a member of Jest's expect
+    if (typeof expectation === 'string' && customMatchers[expectation]) {
+        return originalFn(subject, customMatchers[expectation]);
+    }
+    return originalFn(subject, expectation, ...args);
+});
+
+
+
