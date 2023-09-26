@@ -335,4 +335,13 @@ Cypress.Commands.overwrite('should', (originalFn, subject, expectation, ...args)
 });
 
 
+    //checking if checkbox is checked
+   Products.input_regionLocked().then(($element) => {
+            const isChecked = $element.find('path.checkbox-check').attr('fill') === '#fff';
+            Cypress.log({
+                name: 'checkIfElementSelected',
+                message: isChecked ? 'Element is selected (checked).' : 'Element is not selected (unchecked).',
+            });
+            expect(isChecked).to.be.true;
+        });
 
